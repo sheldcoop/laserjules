@@ -1,0 +1,10 @@
+# .streamlit/config.toml
+
+[theme]
+# Themed colors for the final, red-accented theme
+
+primaryColor="#ef4444" 
+backgroundColor="#f6f6f7" 
+secondaryBackgroundColor="#ffffff"
+textColor="#0d0d0d" 
+font="sans serif"
