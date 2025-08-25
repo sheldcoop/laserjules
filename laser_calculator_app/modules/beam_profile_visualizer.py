@@ -2,59 +2,6 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 from utils import UM_TO_CM, UJ_TO_J
-from fpdf import FPDF
-import io
-from datetime import datetime
-
-# --- NEW: PDF Report Generation Function ---
-def generate_pdf_report(inputs, metrics, fig_fluence, fig_via):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    
-    # Title
-    pdf.cell(0, 10, "Laser Microvia Process Simulation Report", 0, 1, "C")
-    pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 5, f"Report generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1, "C")
-    pdf.ln(10)
-
-    # --- Inputs Section ---
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Input Parameters", 0, 1, "L")
-    pdf.set_font("Arial", "", 10)
-    
-    col_width = pdf.w / 2.2
-    for key, value in inputs.items():
-        pdf.cell(col_width, 8, f"{key}:", border=1)
-        pdf.cell(col_width, 8, str(value), border=1)
-        pdf.ln()
-    pdf.ln(5)
-
-    # --- Metrics Section ---
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Predicted Results", 0, 1, "L")
-    pdf.set_font("Arial", "", 10)
-
-    for key, value in metrics.items():
-        pdf.cell(col_width, 8, f"{key}:", border=1)
-        pdf.cell(col_width, 8, str(value), border=1)
-        pdf.ln()
-    pdf.ln(10)
-
-    # --- Plots Section ---
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "Visualizations", 0, 1, "L")
-    
-    # Convert plotly figures to in-memory image files
-    fluence_img_bytes = fig_fluence.to_image(format="png", width=600, height=400, scale=2)
-    via_img_bytes = fig_via.to_image(format="png", width=600, height=400, scale=2)
-    
-    # Add images to PDF
-    pdf.image(io.BytesIO(fluence_img_bytes), x=10, w=pdf.w/2 - 15)
-    pdf.image(io.BytesIO(via_img_bytes), x=pdf.w/2 + 5, w=pdf.w/2 - 15)
-
-    return pdf.output()
-
 
 def render():
     st.header("Microvia Process Simulator")
@@ -76,7 +23,6 @@ def render():
         st.info("Adjust the sliders for quick exploration or type exact values for precision.")
         
         st.subheader(" Laser Parameters")
-        # --- NEW: Beam Profile Selection ---
         beam_profile = st.selectbox("Beam Profile", ["Gaussian", "Top-Hat"], help="Select the energy distribution of the laser beam.")
 
         c1, c2 = st.columns([3, 1])
@@ -91,7 +37,6 @@ def render():
         with c2:
             beam_diameter_um = st.number_input("Value", value=bd_slider, min_value=5.0, max_value=50.0, step=0.1, key="bd_num_sim", label_visibility="collapsed")
 
-        # ... (rest of the UI for Material Properties and Process Goal) ...
         st.subheader(" Material Properties")
         c1, c2 = st.columns([3, 1])
         with c1:
@@ -116,8 +61,7 @@ def render():
 
     else: # Recipe Goal Seeker (simplified to Gaussian-only for clarity)
         st.info("Define your desired via and calculate a starting recipe for a GAUSSIAN beam.")
-        beam_profile = "Gaussian" # Goal seeker is fixed to Gaussian
-        # ... (Goal Seeker UI remains largely the same) ...
+        beam_profile = "Gaussian"
         col1, col2, col3 = st.columns(3)
         with col1:
             st.subheader("🎯 Desired Via")
@@ -160,7 +104,6 @@ def render():
     pulse_energy_j = pulse_energy_uJ * UJ_TO_J
     r_um = np.linspace(-beam_diameter_um * 1.5, beam_diameter_um * 1.5, 501)
     
-    # --- NEW: Conditional physics based on beam profile ---
     if beam_profile == 'Gaussian':
         peak_fluence_j_cm2 = (2 * pulse_energy_j) / (np.pi * (w0_um * UM_TO_CM)**2) if w0_um > 0 else 0
         fluence_profile = peak_fluence_j_cm2 * np.exp(-2 * (r_um**2) / w0_um**2)
@@ -204,7 +147,6 @@ def render():
 
     # --- METRICS DISPLAY ---
     st.markdown("---")
-    # ... (Metrics display code remains the same) ...
     st.subheader("Process Metrics")
     c1, c2 = st.columns(2)
     c1.metric("Peak Fluence", f"{peak_fluence_j_cm2:.2f} J/cm²")
@@ -217,13 +159,11 @@ def render():
     c3.metric("Wall Angle (Taper)", f"{taper_angle_deg:.2f}°", help="Angle from the vertical. Smaller is better.")
     c4.metric("Taper Ratio", f"{taper_ratio:.3f}", help="Ratio of radial change to depth (tan(θ)). Smaller is better.")
 
-
     # --- PLOTTING ---
     st.markdown("---")
-    # ... (Plotting code remains the same, it will automatically update with the new profiles) ...
     plot1, plot2 = st.columns(2)
-
     with plot1:
+        # This plot code remains the same and works for both beam profiles
         fig_fluence = go.Figure()
         fig_fluence.add_trace(go.Scatter(x=r_um, y=fluence_profile, mode='lines', line=dict(color='#ef4444', width=3)))
         fig_fluence.add_trace(go.Scatter(x=r_um, y=np.full_like(r_um, ablation_threshold_j_cm2), mode='lines', line=dict(color='grey', dash='dash')))
@@ -236,30 +176,26 @@ def render():
         st.plotly_chart(fig_fluence, use_container_width=True)
 
     with plot2:
+        # This plot code also remains the same
         fig_via = go.Figure()
         material_poly_x = np.concatenate([r_um, r_um[::-1]])
         material_poly_y = np.concatenate([-np.full_like(r_um, material_thickness), -final_via_profile[::-1]])
         fig_via.add_trace(go.Scatter(x=material_poly_x, y=material_poly_y, fill='toself', mode='lines', line_color='#3498db', fillcolor='rgba(220, 220, 220, 0.7)', name='Material'))
         fig_via.add_trace(go.Scatter(x=r_um, y=-final_via_profile, mode='lines', line=dict(color='#3498db', width=3)))
-        
         status_text = "SUCCESS" if bottom_diameter_um > 0 else "INCOMPLETE"
         status_color = "green" if bottom_diameter_um > 0 else "red"
         fig_via.add_annotation(x=0, y=-material_thickness/2, text=status_text, showarrow=False, font=dict(color=status_color, size=16), bgcolor="rgba(255,255,255,0.7)")
-
         fig_via.add_shape(type="line", x0=-top_diameter_um/2, y0=material_thickness*0.1, x1=top_diameter_um/2, y1=material_thickness*0.1, line=dict(color="black", width=1))
         fig_via.add_annotation(x=0, y=material_thickness*0.15, text=f"Top: {top_diameter_um:.2f} µm", showarrow=False, yanchor="bottom", font=dict(size=10))
         if bottom_diameter_um > 0:
             fig_via.add_shape(type="line", x0=-bottom_diameter_um/2, y0=-material_thickness*1.1, x1=bottom_diameter_um/2, y1=-material_thickness*1.1, line=dict(color="black", width=1))
             fig_via.add_annotation(x=0, y=-material_thickness*1.15, text=f"Bottom: {bottom_diameter_um:.2f} µm", showarrow=False, yanchor="top", font=dict(size=10))
-        
         fig_via.update_layout(title="<b>Effect:</b> Predicted Microvia Cross-Section", xaxis_title="Radial Position (µm)", yaxis_title="Depth (µm)", yaxis_range=[-material_thickness * 1.5, material_thickness * 0.5], showlegend=False, margin=dict(t=50))
         st.plotly_chart(fig_via, use_container_width=True)
 
-
-    # --- FINAL: 3D Visualization and PDF Report Download ---
     with st.expander("Show Interactive 3D Via Visualization"):
-        # ... (3D plot code remains the same) ...
         if max_depth_per_pulse > 0:
+            # 3D plot logic now also handles both beam profiles
             x_3d = np.linspace(r_um.min(), r_um.max(), 100)
             y_3d = np.linspace(r_um.min(), r_um.max(), 100)
             X, Y = np.meshgrid(x_3d, y_3d)
@@ -286,39 +222,3 @@ def render():
             st.plotly_chart(fig3d, use_container_width=True)
         else:
             st.warning("No ablation occurs with the current settings. Cannot render 3D view.")
-    
-    st.markdown("---")
-    
-    # --- NEW: PDF Download Button and Logic ---
-    st.subheader("Download Simulation Report")
-    
-    # Prepare data dictionaries for the report
-    input_data = {
-        "Beam Profile": beam_profile,
-        "Pulse Energy (µJ)": f"{pulse_energy_uJ:.3f}",
-        "Beam Diameter (µm)": f"{beam_diameter_um:.2f}",
-        "Ablation Threshold (J/cm²)": f"{ablation_threshold_j_cm2:.3f}",
-        "Penetration Depth (µm)": f"{alpha_inv:.3f}",
-        "Number of Shots": str(number_of_shots),
-        "Material Thickness (µm)": f"{material_thickness:.2f}"
-    }
-
-    metric_data = {
-        "Peak Fluence (J/cm²)": f"{peak_fluence_j_cm2:.2f}",
-        "Depth per Pulse (µm)": f"{max_depth_per_pulse:.2f}",
-        "Top Diameter (µm)": f"{top_diameter_um:.2f}",
-        "Bottom Diameter (µm)": f"{bottom_diameter_um:.2f}",
-        "Wall Angle (Taper) (°)": f"{taper_angle_deg:.2f}",
-        "Taper Ratio": f"{taper_ratio:.3f}"
-    }
-    
-    # Generate PDF in memory
-    pdf_data = generate_pdf_report(input_data, metric_data, fig_fluence, fig_via)
-    
-    st.download_button(
-        label="📄 Download Report as PDF",
-        data=pdf_data,
-        file_name=f"laser_via_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-        mime="application/pdf",
-        use_container_width=True
-    )
