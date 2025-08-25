@@ -2,12 +2,65 @@ import streamlit as st
 import numpy as np
 import plotly.graph_objects as go
 from utils import UM_TO_CM, UJ_TO_J
+from fpdf import FPDF
+import io
+from datetime import datetime
+
+# --- NEW: PDF Report Generation Function ---
+def generate_pdf_report(inputs, metrics, fig_fluence, fig_via):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    
+    # Title
+    pdf.cell(0, 10, "Laser Microvia Process Simulation Report", 0, 1, "C")
+    pdf.set_font("Arial", "", 10)
+    pdf.cell(0, 5, f"Report generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1, "C")
+    pdf.ln(10)
+
+    # --- Inputs Section ---
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "Input Parameters", 0, 1, "L")
+    pdf.set_font("Arial", "", 10)
+    
+    col_width = pdf.w / 2.2
+    for key, value in inputs.items():
+        pdf.cell(col_width, 8, f"{key}:", border=1)
+        pdf.cell(col_width, 8, str(value), border=1)
+        pdf.ln()
+    pdf.ln(5)
+
+    # --- Metrics Section ---
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "Predicted Results", 0, 1, "L")
+    pdf.set_font("Arial", "", 10)
+
+    for key, value in metrics.items():
+        pdf.cell(col_width, 8, f"{key}:", border=1)
+        pdf.cell(col_width, 8, str(value), border=1)
+        pdf.ln()
+    pdf.ln(10)
+
+    # --- Plots Section ---
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "Visualizations", 0, 1, "L")
+    
+    # Convert plotly figures to in-memory image files
+    fluence_img_bytes = fig_fluence.to_image(format="png", width=600, height=400, scale=2)
+    via_img_bytes = fig_via.to_image(format="png", width=600, height=400, scale=2)
+    
+    # Add images to PDF
+    pdf.image(io.BytesIO(fluence_img_bytes), x=10, w=pdf.w/2 - 15)
+    pdf.image(io.BytesIO(via_img_bytes), x=pdf.w/2 + 5, w=pdf.w/2 - 15)
+
+    return pdf.output(dest='S').encode('latin-1')
+
 
 def render():
     st.header("Microvia Process Simulator")
     st.markdown("---")
 
-    # State management to switch between modes programmatically
+    # State management for mode switching
     if st.session_state.get("switch_to_simulator", False):
         st.session_state.simulator_mode = "Interactive Simulator"
         st.session_state.switch_to_simulator = False
@@ -15,19 +68,17 @@ def render():
     mode_options = ["Interactive Simulator", "Recipe Goal Seeker"]
     current_mode_index = mode_options.index(st.session_state.get("simulator_mode", "Interactive Simulator"))
 
-    calc_mode = st.radio(
-        "Select Mode",
-        options=mode_options,
-        index=current_mode_index,
-        key="simulator_mode",
-        horizontal=True,
-    )
+    calc_mode = st.radio("Select Mode", options=mode_options, index=current_mode_index, key="simulator_mode", horizontal=True)
 
+    # --- UI and Logic for the Simulator ---
     if calc_mode == "Interactive Simulator":
         params = st.session_state.get("sim_params", {})
         st.info("Adjust the sliders for quick exploration or type exact values for precision.")
         
         st.subheader(" Laser Parameters")
+        # --- NEW: Beam Profile Selection ---
+        beam_profile = st.selectbox("Beam Profile", ["Gaussian", "Top-Hat"], help="Select the energy distribution of the laser beam.")
+
         c1, c2 = st.columns([3, 1])
         with c1:
             pe_slider = st.slider("Pulse Energy (µJ)", 0.1, 50.0, params.get("pulse_energy", 10.0), 0.1)
@@ -40,6 +91,7 @@ def render():
         with c2:
             beam_diameter_um = st.number_input("Value", value=bd_slider, min_value=5.0, max_value=50.0, step=0.1, key="bd_num_sim", label_visibility="collapsed")
 
+        # ... (rest of the UI for Material Properties and Process Goal) ...
         st.subheader(" Material Properties")
         c1, c2 = st.columns([3, 1])
         with c1:
@@ -61,9 +113,11 @@ def render():
             number_of_shots = st.number_input("Value", value=ns_slider, min_value=1, max_value=300, step=1, key="ns_num_sim", label_visibility="collapsed")
         
         material_thickness = st.number_input("Material Thickness (µm)", 1.0, 200.0, params.get("material_thickness", 50.0), key="mt_num_sim")
-        
-    else: # Recipe Goal Seeker
-        st.info("Define your desired via and calculate the required laser energy and number of shots.")
+
+    else: # Recipe Goal Seeker (simplified to Gaussian-only for clarity)
+        st.info("Define your desired via and calculate a starting recipe for a GAUSSIAN beam.")
+        beam_profile = "Gaussian" # Goal seeker is fixed to Gaussian
+        # ... (Goal Seeker UI remains largely the same) ...
         col1, col2, col3 = st.columns(3)
         with col1:
             st.subheader("🎯 Desired Via")
@@ -104,20 +158,29 @@ def render():
     # --- SHARED CALCULATION & VISUALIZATION LOGIC ---
     w0_um = beam_diameter_um / 2
     pulse_energy_j = pulse_energy_uJ * UJ_TO_J
-    peak_fluence_j_cm2 = (2 * pulse_energy_j) / (np.pi * (w0_um * UM_TO_CM)**2) if w0_um > 0 else 0
-    
     r_um = np.linspace(-beam_diameter_um * 1.5, beam_diameter_um * 1.5, 501)
-    fluence_profile = peak_fluence_j_cm2 * np.exp(-2 * (r_um**2) / w0_um**2)
     
+    # --- NEW: Conditional physics based on beam profile ---
+    if beam_profile == 'Gaussian':
+        peak_fluence_j_cm2 = (2 * pulse_energy_j) / (np.pi * (w0_um * UM_TO_CM)**2) if w0_um > 0 else 0
+        fluence_profile = peak_fluence_j_cm2 * np.exp(-2 * (r_um**2) / w0_um**2)
+    else: # Top-Hat
+        peak_fluence_j_cm2 = pulse_energy_j / (np.pi * (w0_um * UM_TO_CM)**2) if w0_um > 0 else 0
+        fluence_profile = np.where(np.abs(r_um) <= w0_um, peak_fluence_j_cm2, 0)
+
     depth_profile_um = np.zeros_like(fluence_profile)
     ablation_mask = fluence_profile > ablation_threshold_j_cm2
     
     if np.any(ablation_mask):
         fluence_ratio = fluence_profile[ablation_mask] / ablation_threshold_j_cm2
         depth_profile_um[ablation_mask] = alpha_inv * np.log(fluence_ratio)
-        log_term = np.log(peak_fluence_j_cm2 / ablation_threshold_j_cm2)
-        top_diameter_um = np.sqrt(2 * w0_um**2 * log_term)
-    else: top_diameter_um = 0
+        if beam_profile == 'Gaussian':
+            log_term = np.log(peak_fluence_j_cm2 / ablation_threshold_j_cm2)
+            top_diameter_um = np.sqrt(2 * w0_um**2 * log_term) if log_term > 0 else 0
+        else: # Top-Hat
+            top_diameter_um = beam_diameter_um if peak_fluence_j_cm2 > ablation_threshold_j_cm2 else 0
+    else: 
+        top_diameter_um = 0
     
     max_depth_per_pulse = depth_profile_um.max()
     total_depth_profile = number_of_shots * depth_profile_um
@@ -126,7 +189,9 @@ def render():
     if np.any(through_mask):
         exit_indices = np.where(through_mask)[0]
         bottom_diameter_um = r_um[exit_indices[-1]] - r_um[exit_indices[0]]
-    else: bottom_diameter_um = 0.0
+    else: 
+        bottom_diameter_um = 0.0
+    
     final_via_profile = np.clip(total_depth_profile, 0, material_thickness)
 
     if bottom_diameter_um > 0:
@@ -139,6 +204,7 @@ def render():
 
     # --- METRICS DISPLAY ---
     st.markdown("---")
+    # ... (Metrics display code remains the same) ...
     st.subheader("Process Metrics")
     c1, c2 = st.columns(2)
     c1.metric("Peak Fluence", f"{peak_fluence_j_cm2:.2f} J/cm²")
@@ -151,8 +217,10 @@ def render():
     c3.metric("Wall Angle (Taper)", f"{taper_angle_deg:.2f}°", help="Angle from the vertical. Smaller is better.")
     c4.metric("Taper Ratio", f"{taper_ratio:.3f}", help="Ratio of radial change to depth (tan(θ)). Smaller is better.")
 
+
     # --- PLOTTING ---
     st.markdown("---")
+    # ... (Plotting code remains the same, it will automatically update with the new profiles) ...
     plot1, plot2 = st.columns(2)
 
     with plot1:
@@ -187,14 +255,21 @@ def render():
         fig_via.update_layout(title="<b>Effect:</b> Predicted Microvia Cross-Section", xaxis_title="Radial Position (µm)", yaxis_title="Depth (µm)", yaxis_range=[-material_thickness * 1.5, material_thickness * 0.5], showlegend=False, margin=dict(t=50))
         st.plotly_chart(fig_via, use_container_width=True)
 
+
+    # --- FINAL: 3D Visualization and PDF Report Download ---
     with st.expander("Show Interactive 3D Via Visualization"):
+        # ... (3D plot code remains the same) ...
         if max_depth_per_pulse > 0:
             x_3d = np.linspace(r_um.min(), r_um.max(), 100)
             y_3d = np.linspace(r_um.min(), r_um.max(), 100)
             X, Y = np.meshgrid(x_3d, y_3d)
             R_sq = X**2 + Y**2
             
-            fluence_3d = peak_fluence_j_cm2 * np.exp(-2 * R_sq / w0_um**2)
+            if beam_profile == 'Gaussian':
+                fluence_3d = peak_fluence_j_cm2 * np.exp(-2 * R_sq / w0_um**2)
+            else: # Top-Hat
+                fluence_3d = np.where(R_sq <= w0_um**2, peak_fluence_j_cm2, 0)
+
             depth_3d = np.zeros_like(fluence_3d)
             ablation_mask_3d = fluence_3d > ablation_threshold_j_cm2
             
@@ -211,61 +286,39 @@ def render():
             st.plotly_chart(fig3d, use_container_width=True)
         else:
             st.warning("No ablation occurs with the current settings. Cannot render 3D view.")
-
-    # --- The comprehensive science and formula reference section ---
-    st.markdown("---")
-    with st.expander("🔬 The Science & Formulas Behind the Simulation", expanded=False):
-        st.subheader("Core Principles")
-        st.markdown("""
-        This simulator models how multiple Gaussian laser pulses drill a microvia based on established physical models.
-        1.  **Single-Pulse Crater:** The shape of the hole from one pulse is first calculated using a logarithmic model based on the beam's fluence profile and the material's properties.
-        2.  **Linear Accumulation:** The total depth is estimated by multiplying the single-pulse crater depth by the number of shots. This assumes no major changes in material properties or laser absorption from one pulse to the next.
-        3.  **Via Formation:** The final via shape is the result of this accumulated depth being "clipped" by the material's thickness.
-        """)
-
-        st.subheader("Key Parameter Formulas")
-
-        st.markdown("**1. Peak Fluence ($F_0$)**")
-        st.markdown(r"""
-        This is the maximum energy density at the center of the Gaussian laser beam.
-        $$ F_0 = \frac{2E}{\pi w_0^2} $$
-        - **E**: Pulse Energy (Joules)
-        - **$w_0$**: Beam Radius at $1/e^2$ intensity (cm)
-        """)
-
-        st.markdown("**2. Top Diameter ($D_{top}$)**")
-        st.markdown(r"""
-        The diameter of the via at the surface is determined by the points where the laser's fluence is exactly equal to the material's ablation threshold. This is calculated using the Liu-Srinivasan model.
-        $$ D_{top}^2 = 2w_0^2 \ln\left(\frac{F_0}{F_{th}}\right) $$
-        - **$F_{th}$**: Ablation Threshold (J/cm²)
-        """)
-
-        st.markdown("**3. Depth per Pulse ($Z_{max}$)**")
-        st.markdown(r"""
-        This is the maximum depth ablated at the center of the beam by a single pulse.
-        $$ Z_{max} = \alpha^{-1} \ln\left(\frac{F_0}{F_{th}}\right) $$
-        - **$\alpha^{-1}$**: Effective Penetration Depth (µm)
-        """)
-
-        st.markdown("**4. Bottom Diameter ($D_{bottom}$)**")
-        st.markdown(r"""
-        There is no direct analytical formula for the bottom diameter. It is found numerically by the simulation using the following method:
-        1.  The full depth profile after all shots is calculated: $D_{total}(r) = \text{Shots} \times Z(r)$
-        2.  The simulation finds the radial positions ($r$) where this total depth is exactly equal to the material thickness ($H$).
-        3.  The bottom diameter is the distance between these two radial points.
-        """)
-
-        # --- THIS IS THE CORRECTED LINE ---
-        st.markdown(r"**5. Wall Angle (Taper) ($\theta$)**")
-        st.markdown(r"""
-        This is the half-angle of the via wall measured from the vertical, calculated from the final geometry.
-        $$ \theta = \arctan\left(\frac{D_{top} - D_{bottom}}{2H}\right) $$
-        - **H**: Material Thickness (µm)
-        """)
-
-        st.markdown("**6. Taper Ratio**")
-        st.markdown(r"""
-        A unitless measure of the wall's steepness, equal to the tangent of the taper angle.
-        $$ \text{Taper Ratio} = \frac{D_{top} - D_{bottom}}{2H} $$
-        """)
     
+    st.markdown("---")
+    
+    # --- NEW: PDF Download Button and Logic ---
+    st.subheader("Download Simulation Report")
+    
+    # Prepare data dictionaries for the report
+    input_data = {
+        "Beam Profile": beam_profile,
+        "Pulse Energy (µJ)": f"{pulse_energy_uJ:.3f}",
+        "Beam Diameter (µm)": f"{beam_diameter_um:.2f}",
+        "Ablation Threshold (J/cm²)": f"{ablation_threshold_j_cm2:.3f}",
+        "Penetration Depth (µm)": f"{alpha_inv:.3f}",
+        "Number of Shots": str(number_of_shots),
+        "Material Thickness (µm)": f"{material_thickness:.2f}"
+    }
+
+    metric_data = {
+        "Peak Fluence (J/cm²)": f"{peak_fluence_j_cm2:.2f}",
+        "Depth per Pulse (µm)": f"{max_depth_per_pulse:.2f}",
+        "Top Diameter (µm)": f"{top_diameter_um:.2f}",
+        "Bottom Diameter (µm)": f"{bottom_diameter_um:.2f}",
+        "Wall Angle (Taper) (°)": f"{taper_angle_deg:.2f}",
+        "Taper Ratio": f"{taper_ratio:.3f}"
+    }
+    
+    # Generate PDF in memory
+    pdf_data = generate_pdf_report(input_data, metric_data, fig_fluence, fig_via)
+    
+    st.download_button(
+        label="📄 Download Report as PDF",
+        data=pdf_data,
+        file_name=f"laser_via_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+        mime="application/pdf",
+        use_container_width=True
+    )

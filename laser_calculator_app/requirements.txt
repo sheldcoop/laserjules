@@ -25,3 +25,4 @@ threadpoolctl==3.6.0
 toml==0.10.2
 tzdata==2025.2
 watchdog==6.0.0
+fpdf2

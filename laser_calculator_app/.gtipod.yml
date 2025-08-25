@@ -1,3 +1,11 @@
 tasks:
-  - init: pip install -r requirements.txt
-    command: streamlit run app.py
+  - name: Setup and Run App
+    before: |
+      echo "Installing Python dependencies..."
+      pip install -r laser_calculator_app/requirements.txt
+      echo "Installing Chrome for PDF exports..."
+      plotly_get_chrome
+    command: |
+      echo "Navigating to app directory and starting Streamlit..."
+      cd laser_calculator_app
+      streamlit run app.py
