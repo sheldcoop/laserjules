@@ -53,7 +53,7 @@ def generate_pdf_report(inputs, metrics, fig_fluence, fig_via):
     pdf.image(io.BytesIO(fluence_img_bytes), x=10, w=pdf.w/2 - 15)
     pdf.image(io.BytesIO(via_img_bytes), x=pdf.w/2 + 5, w=pdf.w/2 - 15)
 
-    return pdf.output(dest='S').encode('latin-1')
+    return pdf.output()
 
 
 def render():
