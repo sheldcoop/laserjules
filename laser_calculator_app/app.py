@@ -4,7 +4,8 @@ import streamlit as st
 from modules import (
     home, process_recommender, material_analyzer, liu_plot_analyzer, 
     thermal_effects_calculator, beam_profile_visualizer, mask_finder, 
-    pulse_energy_calculator, fluence_calculator
+    pulse_energy_calculator, fluence_calculator, 
+    documentation  # <-- 1. Import the new documentation module
 )
 
 # --- PAGE CONFIGURATION ---
@@ -15,7 +16,7 @@ st.set_page_config(
 )
 
 # --- CUSTOM CSS FOR PROFESSIONAL STYLING ---
-# This CSS now includes styling for a prominent home button
+# This CSS is stable and correct. No changes are needed here.
 st.markdown("""
 <style>
     /* Main App Styling */
@@ -24,7 +25,7 @@ st.markdown("""
     /* Sidebar Styling */
     [data-testid="stSidebar"] { padding-top: 1.5rem; }
     
-    /* --- NEW: Home Button Styling --- */
+    /* Home Button Styling */
     [data-testid="stSidebar"] .stButton button[data-testid="stButton-Home"] {
         font-size: 1.5rem;
         font-weight: 700;
@@ -69,7 +70,8 @@ st.markdown("""
 if 'app_mode' not in st.session_state:
     st.session_state.app_mode = "Home"
 
-# --- HIERARCHICAL MODULE DICTIONARY (Simplified) ---
+# --- HIERARCHICAL MODULE DICTIONARY ---
+# This dictionary is also correct and does not need to be changed.
 TOOL_CATEGORIES = {
     "Core Workflow": {
         "Material Analyzer": material_analyzer,
@@ -89,27 +91,38 @@ TOOL_CATEGORIES = {
 
 # --- SIDEBAR RENDERING ---
 with st.sidebar:
-    # --- NEW: Robust Button as Home Anchor ---
+    # Robust Button as Home Anchor
     if st.button("Laser Dashboard", use_container_width=True, key="stButton-Home"):
         st.session_state.app_mode = "Home"
         st.rerun()
     
     st.markdown("---")
     
-    # --- UPDATED: All tool groups are now expanders ---
+    # All tool groups in expanders
     for category_name, tools in TOOL_CATEGORIES.items():
-        with st.expander(category_name, expanded=True): # Expanded by default
+        with st.expander(category_name, expanded=True):
             for tool_name, tool_module in tools.items():
                 btn_type = "primary" if st.session_state.app_mode == tool_name else "secondary"
                 if st.button(tool_name, use_container_width=True, type=btn_type):
                     st.session_state.app_mode = tool_name
                     st.rerun()
+    
+    # <-- 2. Add the dedicated button for the documentation below the tool expanders
+    st.markdown("---")
+    doc_btn_type = "primary" if st.session_state.app_mode == "Scientific Reference" else "secondary"
+    if st.button("🔬 Scientific Reference", use_container_width=True, type=doc_btn_type):
+        st.session_state.app_mode = "Scientific Reference"
+        st.rerun()
+
 
 # --- MAIN PANEL DISPATCHER ---
 selected_module = None
 
 if st.session_state.app_mode == "Home":
     selected_module = home
+# <-- 3. Add logic to handle the new "Scientific Reference" mode
+elif st.session_state.app_mode == "Scientific Reference":
+    selected_module = documentation
 else:
     for category in TOOL_CATEGORIES.values():
         if st.session_state.app_mode in category:
