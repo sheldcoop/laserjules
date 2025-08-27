@@ -2,90 +2,130 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from sklearn.metrics import r2_score
-from utils import parse_text_input, convert_df_to_csv, UJ_TO_J, UM_TO_CM
+import plotly.graph_objects as go
+from scipy import stats
+from utils import UJ_TO_J, UM_TO_CM
 
 def render():
-    st.header("Analyze Ablation Threshold via Liu Plot")
+    st.markdown("### Beam & Threshold Analyzer (Liu Plot Method)")
+    st.info("This method determines the ablation threshold and effective beam spot size by measuring the **diameter** of ablated craters at different pulse energies.")
     st.markdown("---")
-    st.info("This method determines the ablation threshold and effective beam spot size by measuring the **diameter** of ablated craters at different **pulse energies**.")
-    with st.expander("ℹ️ Understanding the Liu Plot Method"):
-        st.markdown(r"""The Liu method determines $F_{th}$ and $w_0$ from the relationship: $D^2 = 2w_0^2 \ln\left(\frac{F_0}{F_{th}}\right)$. Substituting the peak fluence $F_0 = 2E / (\pi w_0^2)$ gives a linear relationship between $D^2$ and $\ln(E)$:""")
-        st.latex(r'''D^2 = 2w_0^2 \left( \ln(E) - \ln(E_{th}) \right)''')
 
-    input_method = st.radio("Select Data Input Method", ["Paste Data", "Upload CSV"], horizontal=True, key="liu_input")
-    data = None
-    if input_method == "Paste Data":
-        col1, col2 = st.columns(2)
-        energy_str = col1.text_area("Paste Pulse Energy Data (µJ)", "10\n15\n20\n25\n30", height=250)
-        diameter_str = col2.text_area("Paste Measured Diameter Data (µm)", "12.5\n18.2\n22.4\n25.8\n28.6", height=250)
-    else:
-        uploaded_file = st.file_uploader("Upload CSV (must contain 'energy' and 'diameter' columns)", type="csv", key="liu_upload")
-        if uploaded_file:
-            data = pd.read_csv(uploaded_file)
+    # --- Engineer's Workbench Layout ---
+    col_inputs, col_outputs = st.columns([2, 3], gap="large")
+
+    # ---================== COLUMN 1: CONTROL PANEL ==================---
+    with col_inputs:
+        st.subheader("Control Panel")
+
+        with st.container(border=True):
+            st.markdown("<h5>Data Entry</h5>", unsafe_allow_html=True)
+            input_method = st.radio(
+                "Input Method", ["Manual Entry", "Upload CSV"],
+                label_visibility="collapsed", horizontal=True
+            )
+
+            if input_method == "Manual Entry":
+                st.caption("Edit the example data below or add your own points.")
+                example_data = {
+                    "Pulse Energy (µJ)": [10.0, 15.0, 20.0, 25.0, 30.0],
+                    "Measured Diameter (µm)": [12.5, 18.2, 22.4, 25.8, 28.6]
+                }
+                initial_df = pd.DataFrame(example_data)
+                edited_df = st.data_editor(
+                    initial_df,
+                    num_rows="dynamic",
+                    use_container_width=True
+                )
+            else:
+                uploaded_file = st.file_uploader(
+                    "Upload a CSV file",
+                    type="csv",
+                    help="Your CSV should contain a 'energy' column and a 'diameter' column."
+                )
+
+        analyze_button = st.button("Analyze Liu Plot", type="primary", use_container_width=True)
+
+    # ---================== COLUMN 2: RESULTS CANVAS ==================---
+    with col_outputs:
+        st.subheader("Results Canvas")
+
+        if analyze_button:
+            data_to_process = None
+            if input_method == "Manual Entry":
+                data_to_process = edited_df.dropna(how="any")
+            elif uploaded_file is not None:
+                data_to_process = pd.read_csv(uploaded_file)
             
-    if st.button("Analyze Liu Plot", type="primary", use_container_width=True):
-        with st.spinner("Analyzing data and fitting model..."):
-            try:
-                if input_method == "Paste Data":
-                    energy_list = parse_text_input(energy_str)
-                    diameter_list = parse_text_input(diameter_str)
-                    if len(energy_list) != len(diameter_list) or not energy_list:
-                        st.error("Please ensure you paste the same number of valid data points for energy and diameter.")
-                        return
-                    data = pd.DataFrame({'Pulse Energy (µJ)': energy_list, 'Diameter (µm)': diameter_list})
+            if data_to_process is not None and not data_to_process.empty:
+                with st.spinner("Analyzing data..."):
+                    try:
+                        # Standardize column names
+                        rename_map = {col: 'Pulse Energy (µJ)' for col in data_to_process.columns if 'energy' in col.lower()}
+                        rename_map.update({col: 'Measured Diameter (µm)' for col in data_to_process.columns if 'diameter' in col.lower()})
+                        data_to_process.rename(columns=rename_map, inplace=True)
+                        
+                        data_to_fit = data_to_process[
+                            (data_to_process['Pulse Energy (µJ)'] > 0) & 
+                            (data_to_process['Measured Diameter (µm)'] > 0)
+                        ].copy()
 
-                if data is not None:
-                    rename_map = {col: 'Pulse Energy (µJ)' for col in data.columns if 'energy' in col.lower()}
-                    rename_map.update({col: 'Diameter (µm)' for col in data.columns if 'diameter' in col.lower()})
-                    data = data.rename(columns=rename_map)
-                    
-                    if 'Pulse Energy (µJ)' in data.columns and 'Diameter (µm)' in data.columns:
-                        data_to_fit = data[(data['Diameter (µm)'] > 0) & (data['Pulse Energy (µJ)'] > 0)].copy()
                         if len(data_to_fit) < 2:
-                            st.error("At least two data points with positive energy and diameter are required.")
-                            return
+                            st.error("Analysis requires at least two valid data points.")
+                        else:
+                            # --- Core Liu Plot Calculations ---
+                            data_to_fit['Diameter Squared (µm²)'] = data_to_fit['Measured Diameter (µm)']**2
+                            data_to_fit['Log Energy'] = np.log(data_to_fit['Pulse Energy (µJ)'])
+                            
+                            slope, intercept, r_value, _, _ = stats.linregress(data_to_fit['Log Energy'], data_to_fit['Diameter Squared (µm²)'])
+                            r_squared = r_value**2
+                            
+                            # From slope = 2 * w₀², calculate beam radius w₀
+                            w0_squared_um2 = slope / 2
+                            w0_um = np.sqrt(w0_squared_um2)
+                            beam_spot_diameter_um = 2 * w0_um
+                            
+                            # From intercept = -slope * ln(E_th), calculate threshold energy E_th
+                            threshold_energy_uJ = np.exp(-intercept / slope) if slope != 0 else 0
+                            
+                            # From E_th and w₀, calculate threshold fluence F_th
+                            threshold_energy_J = threshold_energy_uJ * UJ_TO_J
+                            w0_cm = w0_um * UM_TO_CM
+                            threshold_fluence_j_cm2 = (2 * threshold_energy_J) / (np.pi * w0_cm**2) if w0_cm > 0 else 0
+                            
+                            st.markdown("<h6>Analysis Results</h6>", unsafe_allow_html=True)
+                            res1, res2, res3 = st.columns(3)
+                            res1.metric("Calculated Ablation Threshold", f"{threshold_fluence_j_cm2:.3f} J/cm²")
+                            res2.metric("Calculated Beam Spot Diameter", f"{beam_spot_diameter_um:.2f} µm")
+                            res3.metric("Goodness of Fit (R²)", f"{r_squared:.4f}")
 
-                        data_to_fit['Energy (J)'] = data_to_fit['Pulse Energy (µJ)'] * UJ_TO_J
-                        data_to_fit['Log Energy (J)'] = np.log(data_to_fit['Energy (J)'])
-                        data_to_fit['Diameter² (µm²)'] = data_to_fit['Diameter (µm)']**2
-                        
-                        fit = np.polyfit(data_to_fit['Log Energy (J)'], data_to_fit['Diameter² (µm²)'], 1)
-                        slope, intercept = fit
-                        
-                        w0_squared_um2 = slope / 2
-                        w0_um = np.sqrt(w0_squared_um2) if w0_squared_um2 > 0 else 0
-                        beam_diameter_um = 2 * w0_um
-                        
-                        log_E_th = -intercept / slope
-                        E_th_J = np.exp(log_E_th)
-                        
-                        area_cm2 = np.pi * (w0_um * UM_TO_CM)**2
-                        F_th_J_cm2 = (2 * E_th_J) / area_cm2 if area_cm2 > 0 else 0
-                        y_pred = np.polyval(fit, data_to_fit['Log Energy (J)'])
-                        r2 = r2_score(data_to_fit['Diameter² (µm²)'], y_pred)
-                        
-                        st.session_state.liu_results = {
-                            "data": data_to_fit, "threshold": F_th_J_cm2, "beam_diameter": beam_diameter_um,
-                            "r2": r2, "slope": slope, "intercept": intercept
-                        }
-                    else:
-                        st.error("Could not find 'Energy' and 'Diameter' columns in your data.")
-            except Exception as e:
-                st.error(f"An error occurred during analysis: {e}")
-    
-    if st.session_state.app_mode == "Liu Plot Analyzer" and st.session_state.get('liu_results'):
-        results = st.session_state.liu_results
-        st.markdown("---"); st.markdown(f'<p class="results-header">Liu Plot Analysis Results</p>', unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Calculated Ablation Threshold", f"{results['threshold']:.3f} J/cm²" if isinstance(results['threshold'], float) else "N/A")
-        col2.metric("Calculated Beam Spot Diameter (1/e²)", f"{results['beam_diameter']:.2f} µm" if isinstance(results['beam_diameter'], float) else "N/A")
-        col3.metric("Goodness of Fit (R²)", f"{results['r2']:.4f}" if isinstance(results['r2'], float) else "N/A")
-        chart_title = (f"Liu Plot: D² vs. ln(Energy)<br><sup>Fit: y = {results.get('slope', 0):.1f}*x + ({results.get('intercept', 0):.1f}) | R² = {results.get('r2', 0):.4f}</sup>")
-        fig = px.scatter(results['data'], x='Log Energy (J)', y='Diameter² (µm²)', title=chart_title, trendline="ols", log_x=False, hover_data=['Pulse Energy (µJ)', 'Diameter (µm)'])
-        fig.update_traces(marker=dict(size=10, color='#ef4444'))
-        fig.update_layout(xaxis_title="ln(Pulse Energy) [ln(J)]", yaxis_title="Diameter² [µm²]")
-        st.plotly_chart(fig, use_container_width=True)
-        st.subheader("Processed Data")
-        st.dataframe(results['data'].style.format(precision=3), use_container_width=True, hide_index=True)
-        st.download_button("Download Data as CSV", convert_df_to_csv(results['data']), "liu_plot_analysis.csv", "text/csv", use_container_width=True)
+                            st.markdown("<hr>", unsafe_allow_html=True)
+                            st.markdown("<h6>Liu Plot: D² vs. ln(Energy)</h6>", unsafe_allow_html=True)
+                            
+                            fig = px.scatter(
+                                data_to_fit, x='Log Energy', y='Diameter Squared (µm²)',
+                                labels={'Log Energy': 'ln(Pulse Energy)', 'Diameter Squared (µm²)': 'Diameter² (µm²)'}
+                            )
+                            fit_x = np.linspace(data_to_fit['Log Energy'].min(), data_to_fit['Log Energy'].max(), 100)
+                            fit_y = slope * fit_x + intercept
+                            fig.add_trace(go.Scatter(x=fit_x, y=fit_y, mode='lines', name='Linear Fit', line=dict(color='#ef4444')))
+                            st.plotly_chart(fig, use_container_width=True)
+
+                            # --- Workflow Integration ---
+                            st.markdown("---")
+                            st.markdown("<h5>Next Steps</h5>", unsafe_allow_html=True)
+                            if st.button("➡️ Use these parameters in Microvia Simulator", use_container_width=True):
+                                st.session_state.sim_params = {
+                                    'beam_diameter': beam_spot_diameter_um,
+                                    'ablation_threshold': threshold_fluence_j_cm2
+                                }
+                                st.session_state.app_mode = "Microvia Process Simulator"
+                                st.rerun()
+
+                    except Exception as e:
+                        st.error(f"An error occurred during analysis: {e}")
+            else:
+                st.warning("Please provide data before clicking 'Analyze Liu Plot'.")
+        
+        else:
+            st.info("Your Liu Plot analysis, including the calculated beam spot size and ablation threshold, will appear here.")
