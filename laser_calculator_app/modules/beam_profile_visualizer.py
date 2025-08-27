@@ -19,7 +19,13 @@ def render():
 
     with col_outputs:
         st.subheader("Results Canvas")
-        render_outputs(params)
+        # Check if the necessary parameters exist before trying to render outputs
+        if params and "pulse_energy_uJ" in params:
+             render_outputs(params)
+        else:
+            # This handles the initial state for the goal seeker
+            st.info("Define your goal and click 'Generate Recipe' to see the results.")
+
 
 # ======================================================================================
 # INPUT RENDERING FUNCTIONS
@@ -50,26 +56,59 @@ def render_interactive_simulator_inputs():
     with st.container(border=True):
         st.markdown("<h5>Laser Parameters</h5>", unsafe_allow_html=True)
         p["beam_profile"] = st.selectbox("Beam Profile", ["Gaussian", "Top-Hat"])
-        c1, c2 = st.columns([3, 1])
-        with c1: pe_slider = st.slider("Pulse Energy (µJ)", 0.1, 50.0, float(params.get("pulse_energy", 10.0)), 0.1, key="pe_sl")
-        with c2: p["pulse_energy_uJ"] = st.number_input("PE", value=pe_slider, label_visibility="collapsed", key="pe_num")
-        with c1: bd_slider = st.slider("Beam Spot Diameter (µm)", 5.0, 50.0, float(params.get("beam_diameter", 25.0)), 0.5, key="bd_sl")
-        with c2: p["beam_diameter_um"] = st.number_input("BD", value=bd_slider, label_visibility="collapsed", key="bd_num")
+
+        input_method = st.radio("Input Method", ["Pulse Energy", "Average Power"], horizontal=True, label_visibility="collapsed")
+        
+        if input_method == "Average Power":
+            c1, c2 = st.columns(2)
+            avg_power_W = c1.number_input("Average Power (W)", min_value=0.0, value=1.0, step=0.1)
+            rep_rate_kHz = c2.number_input("Rep. Rate (kHz)", min_value=1.0, value=100.0, step=1.0)
+            p["pulse_energy_uJ"] = (avg_power_W / rep_rate_kHz) * 1000 if rep_rate_kHz > 0 else 0
+            st.info(f"Calculated Pulse Energy: **{p['pulse_energy_uJ']:.2f} µJ**")
+        else:
+            p["pulse_energy_uJ"] = st.number_input(
+                "Pulse Energy (µJ)", 
+                min_value=0.01, max_value=20.0, 
+                value=float(params.get("pulse_energy", 1.50)), 
+                step=0.01
+            )
+        
+        p["beam_diameter_um"] = st.number_input(
+            "Beam Spot Diameter (µm)", 
+            min_value=1.0, max_value=50.0, 
+            value=float(params.get("beam_diameter", 11.50)), 
+            step=0.1
+        )
 
     with st.container(border=True):
         st.markdown("<h5>Material Properties</h5>", unsafe_allow_html=True)
-        c1, c2 = st.columns([3, 1])
-        with c1: at_slider = st.slider("Ablation Threshold (J/cm²)", 0.1, 10.0, float(params.get("ablation_threshold", 1.0)), 0.1, key="at_sl")
-        with c2: p["ablation_threshold_j_cm2"] = st.number_input("AT", value=at_slider, label_visibility="collapsed", key="at_num")
-        with c1: ai_slider = st.slider("Penetration Depth (α⁻¹) (µm)", 0.1, 5.0, float(params.get("alpha_inv", 0.5)), 0.05, key="ai_sl")
-        with c2: p["alpha_inv"] = st.number_input("AI", value=ai_slider, label_visibility="collapsed", key="ai_num")
+        p["ablation_threshold_j_cm2"] = st.number_input(
+            "Ablation Threshold (J/cm²)", 
+            min_value=0.01, max_value=5.0, 
+            value=float(params.get("ablation_threshold", 0.20)), 
+            step=0.01
+        )
+        p["alpha_inv"] = st.number_input(
+            "Penetration Depth (α⁻¹) (µm)", 
+            min_value=0.01, max_value=5.0, 
+            value=float(params.get("alpha_inv", 0.45)), 
+            step=0.01
+        )
 
     with st.container(border=True):
         st.markdown("<h5>Process Goal</h5>", unsafe_allow_html=True)
-        c1, c2 = st.columns([3, 1])
-        with c1: ns_slider = st.slider("Number of Shots", 1, 300, int(params.get("number_of_shots", 75)), key="ns_sl")
-        with c2: p["number_of_shots"] = st.number_input("NS", value=ns_slider, label_visibility="collapsed", key="ns_num")
-        p["material_thickness"] = st.number_input("Material Thickness (µm)", 1.0, 200.0, float(params.get("material_thickness", 50.0)), key="mt_num")
+        p["number_of_shots"] = st.number_input(
+            "Number of Shots", 
+            min_value=1, max_value=300, 
+            value=int(params.get("number_of_shots", 75)), 
+            step=1
+        )
+        p["material_thickness"] = st.number_input(
+            "Material Thickness (µm)", 
+            min_value=1.0, max_value=200.0, 
+            value=float(params.get("material_thickness", 50.0)), 
+            step=1.0
+        )
     
     return p
 
