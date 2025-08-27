@@ -1,7 +1,7 @@
 import streamlit as st
 
 def render():
-    # This dictionary holds the information for our pop-up dialogs.
+    # Your TOOL_INFO dictionary for dialogs remains unchanged.
     TOOL_INFO = {
         "Material Analyzer": {
             "title": "Launch Material Analyzer",
@@ -20,14 +20,12 @@ def render():
         }
     }
 
-    # --- DIALOG (POP-UP) LOGIC ---
-    # This block now checks if we need to show our custom dialog.
+    # Your pop-up dialog logic is perfect and remains unchanged.
     if "show_dialog" in st.session_state and st.session_state.show_dialog:
         tool_key = st.session_state.show_dialog
         tool_info = TOOL_INFO.get(tool_key)
 
         if tool_info:
-            # Create a container to act as our dialog box.
             with st.container(border=True):
                 st.subheader(tool_info["title"])
                 st.info(tool_info["description"])
@@ -37,16 +35,15 @@ def render():
                 with col1:
                     if st.button("Continue to Tool", use_container_width=True, type="primary"):
                         st.session_state.app_mode = tool_key
-                        del st.session_state.show_dialog # Close the dialog
+                        del st.session_state.show_dialog
                         st.rerun()
                 with col2:
                     if st.button("Cancel", use_container_width=True):
-                        del st.session_state.show_dialog # Close the dialog
+                        del st.session_state.show_dialog
                         st.rerun()
-        return # Stop rendering the rest of the home page
+        return
 
-    # --- MAIN HOME PAGE UI ---
-    # This section will only run if the dialog is not being shown.
+    # --- MAIN HOME PAGE UI (Unchanged) ---
     st.title("Welcome to the Advanced Laser Process Calculator")
     st.markdown(
         "An integrated suite of tools for laser micro-machining process development and simulation. "
@@ -54,8 +51,9 @@ def render():
     )
     st.markdown("---")
 
-    # --- RECOMMENDED WORKFLOW SECTION ---
+    # --- RECOMMENDED WORKFLOW SECTION (Unchanged) ---
     st.header("Recommended Workflow")
+    # ... (Your existing columns and buttons for the workflow remain here) ...
     col1, col2, col3 = st.columns(3, gap="large")
     workflow_keys = ["Material Analyzer", "Process Recommender", "Microvia Process Simulator"]
     workflow_steps = ["Step 1: Characterize Material", "Step 2: Generate a Recipe", "Step 3: Simulate & Visualize"]
@@ -67,15 +65,15 @@ def render():
                 st.markdown(f"<h5>{workflow_steps[i]}</h5>", unsafe_allow_html=True)
                 st.markdown(TOOL_INFO[tool_key]["description"])
                 if st.button(f"Go to {tool_key}", use_container_width=True, key=f"workflow_{tool_key}"):
-                    # When this button is clicked, we set the session state to show the dialog on the next rerun.
                     st.session_state.show_dialog = tool_key
                     st.rerun()
 
     st.markdown("<br><br>", unsafe_allow_html=True)
     
-    # --- DIRECT TOOL ACCESS SECTION ---
-    st.header("Direct Tool Access")
-    colA, colB = st.columns(2, gap="large")
+    # --- DIRECT TOOL ACCESS & DOCUMENTATION SECTION ---
+    st.header("Direct Tool Access & Resources")
+    # --- KEY CHANGE: We now use 3 columns ---
+    colA, colB, colC = st.columns(3, gap="large")
     
     with colA:
         with st.container(border=True):
@@ -92,3 +90,12 @@ def render():
                 if st.button(tool, use_container_width=True, key=f"direct_{tool}"):
                     st.session_state.app_mode = tool
                     st.rerun()
+
+    # --- NEW: The third column for the Scientific Reference ---
+    with colC:
+        with st.container(border=True):
+            st.markdown("<h5>🔬 Scientific Reference</h5>", unsafe_allow_html=True)
+            st.markdown("Understand the core physics, models, and formulas used in this dashboard.")
+            if st.button("Read the Documentation", use_container_width=True):
+                st.session_state.app_mode = "Scientific Reference"
+                st.rerun()
