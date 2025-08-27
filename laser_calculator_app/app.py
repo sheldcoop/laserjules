@@ -1,65 +1,81 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 
-# --- Step 1: Update imports - remove liu_plot_analyzer ---
+# All modules are imported correctly
 from modules import (
-    home, process_recommender, material_analyzer,
-    taper_angle_calculator, thermal_effects_calculator, beam_profile_visualizer,
+    home, process_recommender, material_analyzer, liu_plot_analyzer,
+    thermal_effects_calculator, beam_profile_visualizer,
     mask_finder, pulse_energy_calculator, fluence_calculator
 )
 
-# (Your Page Config and CSS remain the same)
 st.set_page_config(layout="wide", page_title="Laser Process Calculator")
-st.markdown("""
-    <style>
-        /* ... Your existing CSS ... */
-    </style>
-""", unsafe_allow_html=True)
+# Your custom CSS can remain here if you wish
 
-if 'app_mode' not in st.session_state:
-    st.session_state.app_mode = "Home"
-
-# --- Step 2: Update the MODES dictionary - remove Liu Plot Analyzer ---
+# The complete registry of all tools in the application
 MODES = {
     "Home": home,
     "Process Recommender": process_recommender,
     "Material Analyzer": material_analyzer,
+    "Microvia Process Simulator": beam_profile_visualizer,
+    "Liu Plot Analyzer": liu_plot_analyzer,
     "Thermal Effects Calculator": thermal_effects_calculator,
-    "Beam Profile Visualizer": beam_profile_visualizer,
     "Mask Finder": mask_finder,
     "Pulse Energy": pulse_energy_calculator,
     "Fluence (Energy Density)": fluence_calculator,
 }
 
+# --- STATE MANAGEMENT ---
+# Initialize the app_mode to "Home" on first run
+if 'app_mode' not in st.session_state:
+    st.session_state.app_mode = "Home"
+
+# The "Listener" logic: This is the core of the navigation fix.
+# It checks for a message from the home page at the start of every rerun.
+if "page_request" in st.session_state:
+    st.session_state.app_mode = st.session_state.page_request
+    del st.session_state.page_request # Consume the request so it doesn't fire again
+
+# --- SIDEBAR NAVIGATION ---
 with st.sidebar:
     st.header("App Mode")
     
-    # --- Step 3: Update the navigation menu - remove Liu Plot Analyzer ---
-    main_tools = ["Home", "Process Recommender", "Material Analyzer", "Beam Profile Visualizer"]
-    main_icons = ["house-door-fill", "card-checklist", "key", "bullseye"] 
+    # Define the structure of the navigation menu
+    main_tools = ["Home", "Process Recommender", "Material Analyzer", "Microvia Process Simulator"]
+    main_icons = ["house-door-fill", "card-checklist", "key-fill", "bullseye"] 
     
-    # "Liu Plot Analyzer" is removed from this list
-    adv_tools = ["Thermal Effects Calculator", "Mask Finder"]
-    adv_icons = ["thermometer-half", "aspect-ratio"]
+    adv_tools = ["Liu Plot Analyzer", "Thermal Effects Calculator", "Mask Finder"]
+    adv_icons = ["graph-up-arrow", "thermometer-half", "aspect-ratio-fill"]
 
     fund_tools = ["Pulse Energy", "Fluence (Energy Density)"]
     fund_icons = ["lightning-charge-fill", "brightness-high-fill"]
+    
+    all_options = main_tools + ["---"] + adv_tools + ["---"] + fund_tools
+    all_icons = main_icons + [""] + adv_icons + [""] + fund_icons
+
+    # The default_index is now robustly calculated based on the final app_mode
+    try:
+        current_index = all_options.index(st.session_state.app_mode)
+    except ValueError:
+        current_index = 0 
 
     selected = option_menu(
         menu_title=None,
-        options=main_tools + ["---"] + adv_tools + ["---"] + fund_tools,
-        icons=main_icons + [""] + adv_icons + [""] + fund_icons,
+        options=all_options,
+        icons=all_icons,
         menu_icon="cast",
-        default_index=main_tools.index(st.session_state.app_mode) if st.session_state.app_mode in main_tools else 0
+        default_index=current_index,
     )
 
+    # The sidebar remains the "source of truth" for its own clicks
     if selected and selected != "---" and st.session_state.app_mode != selected:
         st.session_state.app_mode = selected
         st.rerun()
 
-# (The main panel logic remains the same)
+# --- MAIN PANEL ---
+# This part is now simple and reliable
 selected_module = MODES.get(st.session_state.app_mode)
 if selected_module:
     selected_module.render()
 else:
-    st.error("Selected mode not found.")
+    # Provide a more helpful error message if a mode fails to load
+    st.error(f"Error: Could not load the selected mode ('{st.session_state.app_mode}'). Please check if it is correctly registered in app.py.")
