@@ -1,60 +1,59 @@
 import streamlit as st
 
 def render():
-    # --- Inject CSS specific to this page for the cards ---
-    st.markdown("""
-        <style>
-            .home-card {
-                background-color: white;
-                border: 1px solid #E0E0E0;
-                border-radius: 12px;
-                padding: 1.5rem;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.04);
-                transition: all 0.2s ease-in-out;
-                height: 100%; /* Ensure cards in a row have same height */
-            }
-            .home-card:hover {
-                box-shadow: 0 10px 15px rgba(0,0,0,0.08);
-                transform: translateY(-3px);
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # ... (Your TOOL_INFO dictionary here) ...
+    # Your TOOL_INFO dictionary for dialogs remains unchanged.
     TOOL_INFO = {
         "Material Analyzer": {
-            "description": "Start by analyzing your experimental data to determine your material's fundamental properties: the **Ablation Threshold** and **Effective Penetration Depth**."
+            "title": "Launch Material Analyzer",
+            "description": "Start by analyzing your experimental data to determine your material's fundamental properties: the **Ablation Threshold** and **Effective Penetration Depth**.",
+            "what_you_need": "A set of corresponding Fluence (J/cm²) and measured Depth (µm) data points."
         },
         "Process Recommender": {
-            "description": "Use your material properties and process goals to calculate a recommended starting recipe, including the required **Pulse Energy** and **Number of Shots**."
+            "title": "Launch Process Recommender",
+            "description": "Use your material properties and process goals to calculate a recommended starting recipe, including the required **Pulse Energy** and **Number of Shots**.",
+            "what_you_need": "The Ablation Threshold and Penetration Depth from the Material Analyzer, along with your target via dimensions."
         },
         "Microvia Process Simulator": {
-            "description": "Load your recipe into the interactive simulator to visualize the predicted microvia geometry, including **Top/Bottom Diameters** and **Taper Angle**."
+            "title": "Launch Microvia Process Simulator",
+            "description": "Load your recipe into the interactive simulator to visualize the predicted microvia geometry, including **Top/Bottom Diameters** and **Taper Angle**.",
+            "what_you_need": "A complete recipe, including Pulse Energy, Beam Diameter, and Material Properties."
         }
     }
 
-    st.title("Welcome to the Advanced Laser Process Calculator")
-    st.markdown(...) # Your markdown intro
+    # Your pop-up dialog logic is perfect and remains unchanged.
+    if "show_dialog" in st.session_state and st.session_state.show_dialog:
+        tool_key = st.session_state.show_dialog
+        tool_info = TOOL_INFO.get(tool_key)
 
-    # --- RECOMMENDED WORKFLOW WITH CARD STYLING ---
-    st.header("Recommended Workflow")
+        if tool_info:
+            with st.container(border=True):
+                st.subheader(tool_info["title"])
+                st.info(tool_info["description"])
+                st.warning(f"**What you'll need:** {tool_info['what_you_need']}")
+                
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    if st.button("Continue to Tool", use_container_width=True, type="primary"):
+                        st.session_state.app_mode = tool_key
+                        del st.session_state.show_dialog
+                        st.rerun()
+                with col2:
+                    if st.button("Cancel", use_container_width=True):
+                        del st.session_state.show_dialog
+                        st.rerun()
+        return
+
+    # --- MAIN HOME PAGE UI (Unchanged) ---
+    st.title("Welcome to the Advanced Laser Process Calculator")
     st.markdown(
-        """
-        <div class="row">
-            <div class="col-md-4">
-                <div class="home-card">
-                    <h5>Step 1: Characterize Material</h5>
-                    <p>Start by analyzing your experimental data...</p>
-                    # You'll need to embed the button logic within this HTML structure
-                    # This part is more complex, let's simplify for now
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True
+        "An integrated suite of tools for laser micro-machining process development and simulation. "
+        "Follow the recommended workflow below or select a specific tool from the sidebar to begin."
     )
-    # The pure HTML/CSS injection for cards is complex with Streamlit buttons.
-    # Let's use a simpler, more robust method with st.container and a border.
-    
+    st.markdown("---")
+
+    # --- RECOMMENDED WORKFLOW SECTION (Unchanged) ---
+    st.header("Recommended Workflow")
+    # ... (Your existing columns and buttons for the workflow remain here) ...
     col1, col2, col3 = st.columns(3, gap="large")
     workflow_keys = ["Material Analyzer", "Process Recommender", "Microvia Process Simulator"]
     workflow_steps = ["Step 1: Characterize Material", "Step 2: Generate a Recipe", "Step 3: Simulate & Visualize"]
@@ -62,17 +61,19 @@ def render():
     for i, col in enumerate([col1, col2, col3]):
         tool_key = workflow_keys[i]
         with col:
-            # Using st.container with a border is a simpler way to achieve a "card" look
             with st.container(border=True):
                 st.markdown(f"<h5>{workflow_steps[i]}</h5>", unsafe_allow_html=True)
                 st.markdown(TOOL_INFO[tool_key]["description"])
                 if st.button(f"Go to {tool_key}", use_container_width=True, key=f"workflow_{tool_key}"):
-                    st.session_state.app_mode = tool_key
+                    st.session_state.show_dialog = tool_key
                     st.rerun()
 
-    # --- DIRECT TOOL ACCESS WITH CARD STYLING ---
-    st.header("Direct Tool Access")
-    colA, colB = st.columns(2, gap="large")
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    
+    # --- DIRECT TOOL ACCESS & DOCUMENTATION SECTION ---
+    st.header("Direct Tool Access & Resources")
+    # --- KEY CHANGE: We now use 3 columns ---
+    colA, colB, colC = st.columns(3, gap="large")
     
     with colA:
         with st.container(border=True):
@@ -85,7 +86,16 @@ def render():
     with colB:
         with st.container(border=True):
             st.markdown("<h5>Fundamental Calculators</h5>", unsafe_allow_html=True)
-            for tool in ["Mask Finder", "Pulse Energy", "Fluence (Energy Density)"]:
+            for tool in ["Pulse Energy", "Fluence (Energy Density)", "Mask Finder"]:
                 if st.button(tool, use_container_width=True, key=f"direct_{tool}"):
                     st.session_state.app_mode = tool
                     st.rerun()
+
+    # --- NEW: The third column for the Scientific Reference ---
+    with colC:
+        with st.container(border=True):
+            st.markdown("<h5>🔬 Scientific Reference</h5>", unsafe_allow_html=True)
+            st.markdown("Understand the core physics, models, and formulas used in this dashboard.")
+            if st.button("Read the Documentation", use_container_width=True):
+                st.session_state.app_mode = "Scientific Reference"
+                st.rerun()
