@@ -1,38 +1,19 @@
-import pandas as pd
-
-def calculate_pulse_energy(
-    power_list: list[float],
-    rate_list: list[float]
-) -> pd.DataFrame:
+def calculate_pulse_energy(average_power: float, repetition_rate: float) -> float:
     """
-    Calculates pulse energy from average power and repetition rate.
+    Calculates the laser pulse energy.
 
     Args:
-        power_list: A list of average power values in mW.
-        rate_list: A list of repetition rate values in kHz.
+        average_power (float): The average power of the laser in Watts (W).
+        repetition_rate (float): The repetition rate of the laser in Hertz (Hz).
 
     Returns:
-        A pandas DataFrame containing the original inputs and the calculated
-        pulse energy in µJ.
+        float: The pulse energy in Joules (J).
 
     Raises:
-        ValueError: If the input lists are empty or have mismatched lengths.
+        ValueError: If repetition rate is zero, to prevent division by zero.
     """
-    if not power_list or not rate_list:
-        raise ValueError("Input lists cannot be empty.")
-
-    if len(power_list) != len(rate_list):
-        raise ValueError("Input lists must have the same number of data points.")
-
-    # Check for zero in repetition rate to avoid division by zero
-    if any(r == 0 for r in rate_list):
+    if repetition_rate == 0:
         raise ValueError("Repetition rate cannot be zero.")
 
-    df = pd.DataFrame({
-        'Avg. Power (mW)': power_list,
-        'Rep. Rate (kHz)': rate_list
-    })
-
-    df['Pulse Energy (µJ)'] = df['Avg. Power (mW)'] / df['Rep. Rate (kHz)']
-
-    return df
+    pulse_energy = average_power / repetition_rate
+    return pulse_energy
