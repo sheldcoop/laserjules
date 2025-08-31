@@ -236,9 +236,9 @@ def render_interactive_simulator_results(p, results):
 
     st.markdown("<h6>Predicted Via Geometry</h6>", unsafe_allow_html=True)
     g1, g2, g3, g4 = st.columns(4)
-    g1.metric("Top Diameter", f"{results['top_diameter_um']:.2f} µm")
-    g2.metric("Bottom Diameter", f"{results['bottom_diameter_um']:.2f} µm")
-    g3.metric("Wall Angle (Taper)", f"{results['taper_angle_deg']:.2f}°")
+    g1.metric("Top Ø", f"{results['top_diameter_um']:.2f} µm")
+    g2.metric("Bottom Ø", f"{results['bottom_diameter_um']:.2f} µm")
+    g3.metric("Taper Angle", f"{results['taper_angle_deg']:.2f}°")
     g4.metric("Taper Ratio", f"{results['taper_ratio']:.3f}")
     
     st.markdown("<hr>", unsafe_allow_html=True)
