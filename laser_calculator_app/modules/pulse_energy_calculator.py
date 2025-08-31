@@ -1,6 +1,6 @@
 import streamlit as st
-import pandas as pd
 from utils import parse_text_input, convert_df_to_csv
+from core.pulse_energy import calculate_pulse_energy
 
 def render():
     st.header("Calculate Pulse Energy")
@@ -28,25 +28,27 @@ def render():
         st.subheader("Results Canvas")
 
         with st.container(border=True):
-            # We check if the button was pressed in this script run
             if calculate_button:
-                with st.spinner("Calculating..."):
+                try:
                     power_list = parse_text_input(avg_power_str)
                     rate_list = parse_text_input(rep_rate_str)
                     
-                    # Error handling and calculation
                     if not power_list or not rate_list:
-                        st.warning("Please enter values in all fields.")
-                        st.session_state.pe_results_df = None # Clear previous results
-                    elif len(power_list) != len(rate_list):
-                        st.warning("Please enter the same number of data points for all inputs.")
-                        st.session_state.pe_results_df = None # Clear previous results
-                    else:
-                        df = pd.DataFrame({'Avg. Power (mW)': power_list, 'Rep. Rate (kHz)': rate_list})
-                        df['Pulse Energy (µJ)'] = df['Avg. Power (mW)'] / df['Rep. Rate (kHz)']
-                        st.session_state.pe_results_df = df # Save results to session state
+                        st.warning("Please enter values for both average power and repetition rate.")
+                        st.session_state.pe_results_df = None
+                        return
+
+                    with st.spinner("Calculating..."):
+                        results_df = calculate_pulse_energy(power_list, rate_list)
+                        st.session_state.pe_results_df = results_df
+
+                except ValueError as e:
+                    st.error(f"Error: {e}")
+                    st.session_state.pe_results_df = None
+                except Exception as e:
+                    st.error(f"An unexpected error occurred: {e}")
+                    st.session_state.pe_results_df = None
             
-            # This part always runs, displaying the current results or the placeholder
             if 'pe_results_df' in st.session_state and st.session_state.pe_results_df is not None:
                 st.markdown("<h6>Calculation Results</h6>", unsafe_allow_html=True)
                 df_to_show = st.session_state.pe_results_df
