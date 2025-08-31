@@ -20,7 +20,7 @@ def render():
 
     with col1:
         # --- LOTTIE ANIMATION ---
-        lottie_url = "https://lottie.host/89931494-f288-4654-8822-263a41324424/p5E2FEp5L6.json"
+        lottie_url = "https://lottie.host/8f93e626-c603-4252-a521-392a3442d885/hVd5nAn4qE.json"
         lottie_json = load_lottie_from_url(lottie_url)
 
         if lottie_json:
