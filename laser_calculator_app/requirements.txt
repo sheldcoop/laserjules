@@ -1,7 +1,7 @@
 streamlit==1.36.0
-streamlit-option-menu==0.4.0
-numpy
-pandas
-plotly
-scipy
-fpdf2
+numpy==2.3.2
+pandas==2.3.2
+plotly==6.3.0
+scipy==1.16.1
+fpdf2==2.8.4
+pytest==8.3.2
