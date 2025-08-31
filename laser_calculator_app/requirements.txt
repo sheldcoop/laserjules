@@ -5,4 +5,3 @@ pandas
 plotly
 scipy
 fpdf2
-streamlit-lottie==0.0.3
